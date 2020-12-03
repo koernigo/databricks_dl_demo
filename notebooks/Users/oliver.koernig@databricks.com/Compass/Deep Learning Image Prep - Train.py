@@ -8,7 +8,7 @@
 
 dbutils.widgets.text("table_path","/ml/images/tables/")
 table_path=dbutils.widgets.get("table_path")
-dbutils.widgets.text("image_path","/mnt/poc/images/caltech_256/")
+dbutils.widgets.text("image_path","/tmp/ok/images/")
 caltech_256_path = dbutils.widgets.get("image_path")
 table_path=dbutils.widgets.get("table_path")
 

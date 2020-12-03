@@ -10,7 +10,7 @@
 dbutils.widgets.text("table_path","/ml/images/tables/")
 table_path=dbutils.widgets.get("table_path")
 dbutils.widgets.text("image_path","/mnt/poc/images/caltech_256/")
-caltech_256_path = dbutils.widgets.get("image_path")
+image_path = dbutils.widgets.get("image_path")
 table_path=dbutils.widgets.get("table_path")
 
 # COMMAND ----------
@@ -38,7 +38,7 @@ def file_to_label(path):
 scale_image_udf = udf(scale_image, BinaryType())
 file_to_label_udf = udf(file_to_label, IntegerType())
 
-raw_image_df = spark.read.format("binaryFile").option("pathGlobFilter", "*.jpg").option("recursiveFileLookup", "true").load(caltech_256_path).repartition(64)
+raw_image_df = spark.read.format("binaryFile").option("pathGlobFilter", "*.jpg").option("recursiveFileLookup", "true").load(image_path).repartition(64)
 
 # COMMAND ----------
 
@@ -51,6 +51,3 @@ df_with_date.write.partitionBy("load_date").format("delta").mode("append").optio
 # COMMAND ----------
 
 # MAGIC %sql select count(*) from new_images where load_date = current_date()
-
-# COMMAND ----------
-

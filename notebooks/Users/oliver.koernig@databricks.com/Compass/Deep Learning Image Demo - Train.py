@@ -1,6 +1,6 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC From the Parquet table representation, the image data needs some further transformations that are specific to the Keras model used below. They're reshaped again to 299x299(x3), and normalized to [-1,1]. To start, we'll just work with a sample of the train set in memory, and construct a train/test split of the images and labels from there.
+# MAGIC  Use `/dbfs/ml` and Petastorm for Efficient Data Access
 
 # COMMAND ----------
 
@@ -8,22 +8,15 @@
 
 # COMMAND ----------
 
-from tensorflow.keras.applications.xception import preprocess_input
-import numpy as np
-from sklearn.model_selection import train_test_split
-table_path_base = "/ml/images/tables/"
-
-df_pd = spark.read.format("parquet").load(table_path_base+"train").sample(0.1, seed=42).toPandas()
-
-img_size = 299
-X_raw = df_pd["image"].values
-X = np.array([preprocess_input(np.frombuffer(X_raw[i], dtype=np.uint8).reshape((img_size,img_size,3))) for i in range(len(X_raw))])
-del X_raw
-y = df_pd["label"].values - 1 # -1 because labels are 1-based
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
+dbutils.widgets.text("table_path","/ml/images/tables/")
+table_path=dbutils.widgets.get("table_path")
+dbutils.widgets.text("image_path","/tmp/ok/images/")
+image_path = dbutils.widgets.get("image_path")
+table_path=dbutils.widgets.get("table_path")
 
 # COMMAND ----------
 
+from tensorflow.keras.applications.xception import preprocess_input
 from tensorflow import keras
 from tensorflow.keras.applications.xception import Xception
 from tensorflow.keras.layers import Dense, Dropout
@@ -31,6 +24,8 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Nadam
 from tensorflow.keras.layers import Dropout
 
+import numpy as np
+from sklearn.model_selection import train_test_split
 # Additional options here will be used later:
 def build_model(dropout=None):
   model = Sequential()
@@ -45,16 +40,7 @@ def build_model(dropout=None):
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC  Use `/dbfs/ml` and Petastorm for Efficient Data Access
-# MAGIC 
-# MAGIC The simple examples above worked from data in memory, but as a result, only used a fraction of the data. To improve the model, we need to use all of the data, when it can't all fit in memory. (We'll also want to checkpoint the model as training takes longer.) This introduces a new bottleneck: I/O.
-# MAGIC 
-# MAGIC Begin by rewriting the modeling job to instead access the Parquet data directly, in chunks, with `petastorm`.
-
-# COMMAND ----------
-
-path_base = "/mnt/poc/images/"
+path_base = image_path
 checkpoint_path = path_base + "checkpoint"
 dbutils.fs.rm("file:" + checkpoint_path, recurse=True)
 dbutils.fs.mkdirs("file:" + checkpoint_path)
@@ -70,6 +56,11 @@ test_size = spark.read.format("parquet").load(table_path_base_file + "test").cou
 # COMMAND ----------
 
 print(train_size)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC From the Parquet table representation, the image data needs some further transformations that are specific to the Keras model used below. They're reshaped again to 299x299(x3), and normalized to [-1,1]. To start, we'll just work with a sample of the train set in memory, and construct a train/test split of the images and labels from there.
 
 # COMMAND ----------
 
@@ -113,6 +104,7 @@ def make_caching_reader(suffix, cur_shard=None, shard_count=None):
 
 # COMMAND ----------
 
+# DBTITLE 1,Use MLflow for tracking and model registration
 import mlflow
 
 #import mlflow.keras
@@ -129,7 +121,7 @@ mlflow.tensorflow.autolog()
 
 # COMMAND ----------
 
-mlflow.set_experiment("/Users/oliver.koernig@databricks.com/Compass/Deep Learning Image Demo")
+mlflow.set_experiment("/Users/oliver.koernig@databricks.com/Deep Learning Image Demo")
 
 # COMMAND ----------
 
@@ -167,7 +159,7 @@ import time
 batch_size = 32
 num_gpus = 12
 epochs = 12
-databricks_host = 'https://compass-poc.cloud.databricks.com'
+databricks_host = 'https://dogfood.staging.cloud.databricks.com'
 databricks_token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
 
 def train_hvd():
