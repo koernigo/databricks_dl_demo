@@ -159,8 +159,10 @@ import time
 batch_size = 32
 num_gpus = 12
 epochs = 12
-databricks_host = 'https://dogfood.staging.cloud.databricks.com'
-databricks_token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
+
+context = dbutils.notebook.entry_point.getDbutils().notebook().getContext()
+databricks_host = context.apiUrl().get()
+databricks_token = context.apiToken().get()
 
 def train_hvd():
   hvd.init()
@@ -233,11 +235,6 @@ with mlflow.start_run() as run:
   process_mode = "hvd (distributed)"  
   hr = HorovodRunner(np=3)
   hr.run(train_hvd)          
-
-# COMMAND ----------
-
-# MAGIC %fs
-# MAGIC ls /ml/images/tables/pq/train
 
 # COMMAND ----------
 
