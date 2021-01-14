@@ -1,10 +1,5 @@
 # Databricks notebook source
-# MAGIC %md Main Pipeline for the Compass Image training jobs
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC For a preview of the upcoming multi-step workflow visit: https://docs.google.com/presentation/d/122pwNeiD3INnIWkaYEzGjsL4uKbapu_mdYa-nOFGgmk/edit#slide=id.g911d206b2d_0_60
+# MAGIC %md Main Pipeline for the Ml Pipeline Denmo Image training jobs
 
 # COMMAND ----------
 
@@ -23,13 +18,8 @@ def run_with_retry(notebook, timeout, args = {}, max_retries = 3):
 
 # COMMAND ----------
 
-# DBTITLE 1,Step 1: Load New Images For Training
-dbutils.notebook.run( '/Users/oliver.koernig@databricks.com/Compass/Deep Learning Image Prep - Train',0)
-
-# COMMAND ----------
-
-# DBTITLE 1,Step 2:  Run Training Job
-dbutils.notebook.run('/Users/oliver.koernig@databricks.com/Compass/Deep Learning Image Demo - Train',0)
+# DBTITLE 1,Step 1:  Trigger manual labeling job
+dbutils.notebook.run('/Users/oliver.koernig@databricks.com/ML_Pipeline/Deep Learning Image Label',0)
 
 # COMMAND ----------
 

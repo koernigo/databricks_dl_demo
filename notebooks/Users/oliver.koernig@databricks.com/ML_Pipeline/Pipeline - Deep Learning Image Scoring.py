@@ -1,5 +1,5 @@
 # Databricks notebook source
-# MAGIC %md Main Pipeline for the Compass Image Scoring jobs
+# MAGIC %md Main Pipeline for the Ml Pipline Demo Image Scoring jobs
 
 # COMMAND ----------
 
@@ -19,12 +19,12 @@ def run_with_retry(notebook, timeout, args = {}, max_retries = 3):
 # COMMAND ----------
 
 # DBTITLE 1,Step 1: Load New Images For Scoring
-dbutils.notebook.run( '/Users/oliver.koernig@databricks.com/Compass/Deep Learning Image Prep Scoring',0)
+dbutils.notebook.run( '/Users/oliver.koernig@databricks.com/ML_Pipeline/Deep Learning Image Prep Scoring',0)
 
 # COMMAND ----------
 
 # DBTITLE 1,Step 2:  Run Scoring Job
-dbutils.notebook.run('/Users/oliver.koernig@databricks.com/Compass/Deep Learning Image Batch Scoring',0)
+dbutils.notebook.run('/Users/oliver.koernig@databricks.com/ML_Pipeline/Deep Learning Image Batch Scoring',0)
 
 # COMMAND ----------
 
