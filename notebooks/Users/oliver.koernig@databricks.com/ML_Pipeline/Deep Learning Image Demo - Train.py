@@ -6,10 +6,6 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install petastorm
-
-# COMMAND ----------
-
 dbutils.widgets.text("table_path","/ml/images/tables/")
 table_path=dbutils.widgets.get("table_path")
 dbutils.widgets.text("image_path","/tmp/ok/images/")
