@@ -21,13 +21,28 @@ from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Nadam
 from tensorflow.keras.layers import Dropout
+from petastorm.spark import SparkDatasetConverter, make_spark_converter
+from petastorm import TransformSpec
+from petastorm import make_batch_reader
+from petastorm.tf_utils import make_petastorm_dataset
+import tensorflow as tf
+from tensorflow.data.experimental import unbatch
+from tensorflow.io import decode_raw
+from tensorflow.keras.applications.xception import preprocess_input
+from tensorflow.keras.layers import Dropout
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from pyspark.sql.functions import col
 
 import numpy as np
 from sklearn.model_selection import train_test_split
+
+
+IMG_SHAPE = (299, 299, 3)
+
 # Additional options here will be used later:
 def build_model(dropout=None):
   model = Sequential()
-  xception = Xception(include_top=False, input_shape=(img_size,img_size,3), pooling='avg')
+  xception = Xception(include_top=False, input_shape=IMG_SHAPE, pooling='avg')
   for layer in xception.layers:
     layer.trainable = False
   model.add(xception)
@@ -38,22 +53,52 @@ def build_model(dropout=None):
 
 # COMMAND ----------
 
-path_base = image_path
-checkpoint_path = path_base + "checkpoint"
-dbutils.fs.rm("file:" + checkpoint_path, recurse=True)
-dbutils.fs.mkdirs("file:" + checkpoint_path)
-
-table_path_base = "/ml/images/tables/pq/"
-#table_path_base_file = "file:" + table_path_base
-table_path_base_file = table_path_base
-
-# Need the test/train size for estimates of the epoch steps below
-train_size = spark.read.format("parquet").load(table_path_base_file + "train").count()
-test_size = spark.read.format("parquet").load(table_path_base_file + "test").count()
+# MAGIC %run /Projects/ashley.trainor@databricks.com/databricks_dl_demo/notebooks/Users/oliver.koernig@databricks.com/ML_Pipeline/Functions
 
 # COMMAND ----------
 
-print(train_size)
+full_data = spark.table("labeled_images")
+train_data, val_data = full_data.randomSplit([0.9, 0.1], seed=12345)
+
+# COMMAND ----------
+
+# Set a cache directory on DBFS FUSE for intermediate data.
+spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, "file:///dbfs/tmp/petastorm/cache")
+
+converter_train = make_spark_converter(train_data) #add repartition
+convertor_val = make_spark_converter(val_data)
+
+# COMMAND ----------
+
+IMG_SHAPE = (299, 299, 3)
+img_size = 299
+
+def preprocess(content):
+  """
+  Preprocess an image file bytes for MobileNetV2 (ImageNet).
+  """
+  image = Image.open(io.BytesIO(content)).resize([img_size, img_size])
+  image_array = keras.preprocessing.image.img_to_array(image)
+  return preprocess_input(image_array)
+
+def transform_row(pd_batch):
+  """
+  The input and output of this function are pandas dataframes.
+  """
+  pd_batch['features'] = pd_batch['image'].map(lambda x: preprocess(x))
+  pd_batch = pd_batch.drop(labels='image', axis=1)
+  return pd_batch
+
+# The output shape of the `TransformSpec` is not automatically known by petastorm, 
+# so you need to specify the shape for new columns in `edit_fields` and specify the order of 
+# the output columns in `selected_fields`.
+transform_spec_fn = TransformSpec(
+  transform_row, 
+  edit_fields=[('features', np.float32, IMG_SHAPE, False)], 
+  selected_fields=['features', 'label']
+)
+
+
 
 # COMMAND ----------
 
@@ -119,7 +164,7 @@ mlflow.tensorflow.autolog()
 
 # COMMAND ----------
 
-mlflow.set_experiment("/Users/oliver.koernig@databricks.com/Deep Learning Image Demo")
+mlflow.set_experiment("/Users/ashley.trainor@databricks.com/Deep Learning Image Demo")
 
 # COMMAND ----------
 
@@ -178,10 +223,23 @@ def train_hvd():
   os.environ['DATABRICKS_HOST'] = databricks_host
   os.environ['DATABRICKS_TOKEN'] = databricks_token
   
-  with make_caching_reader("train", cur_shard=hvd.rank(), shard_count=hvd.size()) as train_reader:
-    with make_caching_reader("test", cur_shard=hvd.rank(), shard_count=hvd.size()) as test_reader:
-      train_dataset = transform_reader(train_reader, batch_size)
-      test_dataset = transform_reader(test_reader, batch_size)
+  with converter_train.make_tf_dataset(transform_spec=transform_spec_fn, 
+                                       cur_shard=hvd.rank(), shard_count=hvd.size(),
+                                       batch_size=BATCH_SIZE) as train_reader, \
+       convertor_val.make_tf_dataset(transform_spec=transform_spec_fn, 
+                                     cur_shard=hvd.rank(), shard_count=hvd.size(),
+                                     batch_size=BATCH_SIZE) as test_reader:
+     # tf.keras only accept tuples, not namedtuples
+      train_dataset = train_reader.map(lambda x: (x.features, x.label))
+      steps_per_epoch = len(converter_train) // (BATCH_SIZE * hvd.size())
+
+      test_dataset = test_reader.map(lambda x: (x.features, x.label))
+      
+      validation_steps = max(1, len(convertor_val) // (BATCH_SIZE * hvd.size()))
+      
+ 
+  
+
       
       model = build_model(dropout=0.5)
 
@@ -200,8 +258,8 @@ def train_hvd():
         callbacks.append(ModelCheckpoint(checkpoint_path + "/checkpoint-{epoch}.ckpt", save_weights_only=True, verbose=1))
 
       # See comment above on batch_size * num_gpus
-      model.fit(train_dataset, epochs=hvd_epochs, steps_per_epoch=(train_size // (batch_size * num_gpus)),
-                validation_data=test_dataset, validation_steps=(test_size // (batch_size * num_gpus)),
+      model.fit(train_dataset, epochs=hvd_epochs, steps_per_epoch=steps_per_epoch,
+                validation_data=test_dataset, validation_steps=validation_steps,
                 verbose=(2 if hvd.rank() == 0 else 0), callbacks=callbacks)
       
       # Evaluate our model
