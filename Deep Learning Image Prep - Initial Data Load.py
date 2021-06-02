@@ -81,3 +81,4 @@ image_df.write.format("delta").mode("overwrite").saveAsTable("labeled_images")
 
 # COMMAND ----------
 
+
