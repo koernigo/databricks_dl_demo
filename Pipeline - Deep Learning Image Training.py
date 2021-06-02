@@ -1,5 +1,5 @@
 # Databricks notebook source
-# MAGIC %md Main Pipeline for the ML Pioeline Image training jobs
+# MAGIC %md Main Pipeline for the ML Pipeline Image training jobs
 
 # COMMAND ----------
 

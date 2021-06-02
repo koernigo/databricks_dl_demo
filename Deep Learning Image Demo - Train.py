@@ -8,7 +8,9 @@
 
 dbutils.widgets.text("table_path","/ml/images/tables/")
 table_path=dbutils.widgets.get("table_path")
-dbutils.widgets.text("image_path","/tmp/ok/images/")
+dbutils.widgets.text("image_path","/tmp/256_ObjectCategories/")
+dbutils.widgets.text("user","oliver.koernig@databricks.com")
+user = dbutils.widgets.get("user")
 image_path = dbutils.widgets.get("image_path")
 table_path=dbutils.widgets.get("table_path")
 
@@ -53,10 +55,33 @@ def build_model(dropout=None):
 
 # COMMAND ----------
 
-# MAGIC %run /Projects/ashley.trainor@databricks.com/databricks_dl_demo/notebooks/Users/oliver.koernig@databricks.com/ML_Pipeline/Functions
+import io
+import numpy as np
+from PIL import Image
+from pyspark.sql.types import BinaryType, IntegerType
+
+img_size = 299
+
+def scale_image(image_bytes):
+  image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+  # Scale image down
+  image.thumbnail((img_size, img_size), Image.ANTIALIAS)
+  x, y = image.size
+  # Add border to make it square
+  with_bg = Image.new('RGB', (img_size, img_size), (255, 255, 255))
+  with_bg.paste(image, box=((img_size - x) // 2, (img_size - y) // 2))
+  return with_bg.tobytes()
+
+def file_to_label(path):
+  # .../043.coin/043_0042.jpg -> 043.coin -> 043 -> 43
+  return int(path.split("/")[-2].split(".")[-2])
+
+scale_image_udf = udf(scale_image, BinaryType())
+file_to_label_udf = udf(file_to_label, IntegerType())
 
 # COMMAND ----------
 
+spark.sql("USE dl_demo")
 full_data = spark.table("labeled_images")
 train_data, val_data = full_data.randomSplit([0.9, 0.1], seed=12345)
 
@@ -97,8 +122,6 @@ transform_spec_fn = TransformSpec(
   edit_fields=[('features', np.float32, IMG_SHAPE, False)], 
   selected_fields=['features', 'label']
 )
-
-
 
 # COMMAND ----------
 
@@ -164,7 +187,8 @@ mlflow.tensorflow.autolog()
 
 # COMMAND ----------
 
-mlflow.set_experiment("/Users/ashley.trainor@databricks.com/Deep Learning Image Demo")
+experiment_name = f"/Users/{user}/Deep Learning Image Demo"
+mlflow.set_experiment(experiment_name)
 
 # COMMAND ----------
 
@@ -198,11 +222,12 @@ import tensorflow as tf
 from sparkdl import HorovodRunner
 import math
 import time
+import json
 
-batch_size = 32
-num_gpus = 12
+BATCH_SIZE = 32
+num_gpus = 4
 epochs = 12
-databricks_host = 'https://dogfood.staging.cloud.databricks.com'
+databricks_host = json.loads(dbutils.notebook.entry_point.getDbutils().notebook().getContext().toJson())
 databricks_token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
 
 def train_hvd():
@@ -236,11 +261,6 @@ def train_hvd():
       test_dataset = test_reader.map(lambda x: (x.features, x.label))
       
       validation_steps = max(1, len(convertor_val) // (BATCH_SIZE * hvd.size()))
-      
- 
-  
-
-      
       model = build_model(dropout=0.5)
 
       optimizer = Nadam(lr=0.016)
@@ -293,7 +313,7 @@ with mlflow.start_run() as run:
 # COMMAND ----------
 
 # MAGIC %fs
-# MAGIC ls /ml/images/tables/pq/train
+# MAGIC ls /tmp/256_ObjectCategories/
 
 # COMMAND ----------
 

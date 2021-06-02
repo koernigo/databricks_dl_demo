@@ -8,7 +8,7 @@
 
 dbutils.widgets.text("table_path","/ml/images/tables/")
 table_path=dbutils.widgets.get("table_path")
-dbutils.widgets.text("image_path","/tmp/ok/images/")
+dbutils.widgets.text("image_path","/tmp/256_ObjectCategories/")
 caltech_256_path = dbutils.widgets.get("image_path")
 table_path=dbutils.widgets.get("table_path")
 
@@ -19,19 +19,14 @@ table_path=dbutils.widgets.get("table_path")
 
 # COMMAND ----------
 
-# MAGIC %run /Projects/ashley.trainor@databricks.com/databricks_dl_demo/notebooks/Users/oliver.koernig@databricks.com/ML_Pipeline/Functions
-
-# COMMAND ----------
-
 import io
 import numpy as np
 from PIL import Image
 from pyspark.sql.types import BinaryType, IntegerType
 
-# COMMAND ----------
+img_size = 299
 
 def scale_image(image_bytes):
-  byteImgIO = io.BytesIO()
   image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
   # Scale image down
   image.thumbnail((img_size, img_size), Image.ANTIALIAS)
@@ -50,24 +45,15 @@ file_to_label_udf = udf(file_to_label, IntegerType())
 
 # COMMAND ----------
 
+import io
+import numpy as np
+from PIL import Image
+from pyspark.sql.types import BinaryType, IntegerType
+
+# COMMAND ----------
+
 raw_image_df = spark.read.format("binaryFile").option("pathGlobFilter", "*.jpg").option("recursiveFileLookup", "true").load(caltech_256_path).repartition(64).limit(100)
-
 image_df = raw_image_df.select(file_to_label_udf("path").alias("label"), scale_image_udf("content").alias("image")).cache()
-
-
-# COMMAND ----------
-
-from pyspark.sql.functions import col
-
-df = spark.read.format("delta").load("/databricks-datasets/flowers/delta") \
-  .select(col("content"), col("label_index")) \
-  .limit(100)
-
-display(df)
-
-# COMMAND ----------
-
-display(raw_image_df)
 
 # COMMAND ----------
 
@@ -78,7 +64,3 @@ display(raw_image_df)
 
 raw_image_df.write.format("delta").mode("overwrite").saveAsTable("raw_images")
 image_df.write.format("delta").mode("overwrite").saveAsTable("labeled_images")
-
-# COMMAND ----------
-
-
