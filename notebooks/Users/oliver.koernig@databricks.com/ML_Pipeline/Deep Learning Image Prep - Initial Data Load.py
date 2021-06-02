@@ -15,11 +15,13 @@ table_path=dbutils.widgets.get("table_path")
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC create database if not exists dl_demo;
 # MAGIC use dl_demo
 
 # COMMAND ----------
 
-# MAGIC %run /Projects/ashley.trainor@databricks.com/databricks_dl_demo/notebooks/Users/oliver.koernig@databricks.com/ML_Pipeline/Functions
+'''
+%run /Projects/ashley.trainor@databricks.com/databricks_dl_demo/notebooks/Users/oliver.koernig@databricks.com/ML_Pipeline/Functions'''
 
 # COMMAND ----------
 
@@ -30,6 +32,24 @@ from pyspark.sql.types import BinaryType, IntegerType
 
 # COMMAND ----------
 
+img_size = 299
+
+def scale_image(image_bytes):
+  image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+  # Scale image down
+  image.thumbnail((img_size, img_size), Image.ANTIALIAS)
+  x, y = image.size
+  # Add border to make it square
+  with_bg = Image.new('RGB', (img_size, img_size), (255, 255, 255))
+  with_bg.paste(image, box=((img_size - x) // 2, (img_size - y) // 2))
+  return with_bg.tobytes()
+
+def file_to_label(path):
+  # .../043.coin/043_0042.jpg -> 043.coin -> 043 -> 43
+  return int(path.split("/")[-2].split(".")[-2])
+
+scale_image_udf = udf(scale_image, BinaryType())
+file_to_label_udf = udf(file_to_label, IntegerType())
 def scale_image(image_bytes):
   byteImgIO = io.BytesIO()
   image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
@@ -57,17 +77,7 @@ image_df = raw_image_df.select(file_to_label_udf("path").alias("label"), scale_i
 
 # COMMAND ----------
 
-from pyspark.sql.functions import col
-
-df = spark.read.format("delta").load("/databricks-datasets/flowers/delta") \
-  .select(col("content"), col("label_index")) \
-  .limit(100)
-
-display(df)
-
-# COMMAND ----------
-
-display(raw_image_df)
+display(image_df)
 
 # COMMAND ----------
 
@@ -78,6 +88,3 @@ display(raw_image_df)
 
 raw_image_df.write.format("delta").mode("overwrite").saveAsTable("raw_images")
 image_df.write.format("delta").mode("overwrite").saveAsTable("labeled_images")
-
-# COMMAND ----------
-
