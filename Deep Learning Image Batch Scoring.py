@@ -45,10 +45,6 @@ df = spark.table("new_images")
 
 # COMMAND ----------
 
-# MAGIC %run /Projects/ashley.trainor@databricks.com/databricks_dl_demo/notebooks/Users/oliver.koernig@databricks.com/ML_Pipeline/Functions
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC Now we write a Pandas UDF that loads the Production version of the MLflow Keras model, and then scores the images that we loaded from the Delta Table earlier in the notebook. 
 
@@ -72,7 +68,28 @@ schema = StructType(schema_list + label_list + pred_list)
 
 # COMMAND ----------
 
+img_size = 299
+from tensorflow import keras
+
+# COMMAND ----------
+
+def scale_image(image_bytes):
+  image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+  # Scale image down
+  image.thumbnail((img_size, img_size), Image.ANTIALIAS)
+  x, y = image.size
+  # Add border to make it square
+  with_bg = Image.new('RGB', (img_size, img_size), (255, 255, 255))
+  with_bg.paste(image, box=((img_size - x) // 2, (img_size - y) // 2))
+  return with_bg.tobytes()
+
+scale_image_udf = udf(scale_image, BinaryType())
+
+# COMMAND ----------
+
 import pandas as pd
+
+img_size = 299
 
 def predict_match_udf(image_dfs):
   #This loads the latest image scoring production model from the model registry

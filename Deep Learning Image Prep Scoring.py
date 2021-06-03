@@ -15,11 +15,7 @@ table_path=dbutils.widgets.get("table_path")
 
 # COMMAND ----------
 
-# MAGIC %run /Projects/ashley.trainor@databricks.com/databricks_dl_demo/notebooks/Users/oliver.koernig@databricks.com/ML_Pipeline/Functions
-
-# COMMAND ----------
-
-raw_image_df = spark.read.format("binaryFile").option("pathGlobFilter", "*.jpg").option("recursiveFileLookup", "true").load(image_path).repartition(64)
+raw_image_df = spark.read.format("binaryFile").option("pathGlobFilter", "*.jpg").option("recursiveFileLookup", "true").load(image_path).repartition(64).limit(100)
 
 # COMMAND ----------
 
@@ -28,7 +24,3 @@ from pyspark.sql.functions import current_date
 
 df_with_date = raw_image_df.withColumn("load_date", current_date())
 df_with_date.write.partitionBy("load_date").format("delta").mode("append").option("mergeSchema", "true").saveAsTable("new_images")
-
-# COMMAND ----------
-
-# MAGIC %sql select count(*) from new_images where load_date = current_date()

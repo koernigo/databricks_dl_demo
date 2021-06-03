@@ -1,18 +1,6 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC  Use `/dbfs/ml` and Petastorm for Efficient Data Access
-# MAGIC  
-# MAGIC Petastorm is an open source data access library. This library enables single-node or distributed training and evaluation of deep learning models directly from datasets in Apache Parquet format and datasets that are already loaded as Apache Spark DataFrames. Petastorm supports popular Python-based machine learning (ML) frameworks such as Tensorflow, PyTorch, and PySpark. For more information about Petastorm, refer to the Petastorm GitHub page and Petastorm API documentation.
-
-# COMMAND ----------
-
-dbutils.widgets.text("table_path","/ml/images/tables/")
-table_path=dbutils.widgets.get("table_path")
-dbutils.widgets.text("image_path","/tmp/256_ObjectCategories/")
-dbutils.widgets.text("user","oliver.koernig@databricks.com")
-user = dbutils.widgets.get("user")
-image_path = dbutils.widgets.get("image_path")
-table_path=dbutils.widgets.get("table_path")
+# MAGIC Imports
 
 # COMMAND ----------
 
@@ -34,12 +22,55 @@ from tensorflow.keras.applications.xception import preprocess_input
 from tensorflow.keras.layers import Dropout
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from pyspark.sql.functions import col
-
+import math
+import time
+import json
 import numpy as np
 from sklearn.model_selection import train_test_split
+import os
+import tempfile
+from sparkdl import HorovodRunner
+import random
+from pyspark.sql.functions import col
 
+from petastorm.spark import SparkDatasetConverter, make_spark_converter
+
+import io
+import numpy as np
+import tensorflow as tf
+from PIL import Image
+from petastorm import TransformSpec
+from tensorflow import keras
+from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
+
+from hyperopt import fmin, tpe, hp, SparkTrials, STATUS_OK
+
+import horovod.tensorflow.keras as hvd
+from sparkdl import HorovodRunner
+
+# COMMAND ----------
+
+dbutils.widgets.text("table_path","/ml/images/tables/")
+table_path=dbutils.widgets.get("table_path")
+dbutils.widgets.text("image_path","/tmp/ok/images/")
+image_path = dbutils.widgets.get("image_path")
+table_path=dbutils.widgets.get("table_path")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC configurations
+
+# COMMAND ----------
 
 IMG_SHAPE = (299, 299, 3)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Next we build the model
+
+# COMMAND ----------
 
 # Additional options here will be used later:
 def build_model(dropout=None):
@@ -55,63 +86,67 @@ def build_model(dropout=None):
 
 # COMMAND ----------
 
-import io
-import numpy as np
-from PIL import Image
-from pyspark.sql.types import BinaryType, IntegerType
+path_base = image_path
+checkpoint_path = path_base + "checkpoint"
+dbutils.fs.rm("file:" + checkpoint_path, recurse=True)
+dbutils.fs.mkdirs("file:" + checkpoint_path)
 
-img_size = 299
+# COMMAND ----------
 
-def scale_image(image_bytes):
-  image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
-  # Scale image down
-  image.thumbnail((img_size, img_size), Image.ANTIALIAS)
-  x, y = image.size
-  # Add border to make it square
-  with_bg = Image.new('RGB', (img_size, img_size), (255, 255, 255))
-  with_bg.paste(image, box=((img_size - x) // 2, (img_size - y) // 2))
-  return with_bg.tobytes()
-
-def file_to_label(path):
-  # .../043.coin/043_0042.jpg -> 043.coin -> 043 -> 43
-  return int(path.split("/")[-2].split(".")[-2])
-
-scale_image_udf = udf(scale_image, BinaryType())
-file_to_label_udf = udf(file_to_label, IntegerType())
+# MAGIC %md
+# MAGIC now we load in the data
 
 # COMMAND ----------
 
 spark.sql("USE dl_demo")
-full_data = spark.table("labeled_images")
-train_data, val_data = full_data.randomSplit([0.9, 0.1], seed=12345)
+full_data = spark.table("labeled_images").select("content", "label")
+df_train, df_val = full_data.randomSplit([0.9, 0.1], seed=12345)
+
+num_classes = full_data.select("label").distinct().count()
+
+# Make sure the number of partitions is at least the number of workers which is required for distributed training.
+df_train = df_train.repartition(2)
+df_val = df_val.repartition(2)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC  Use `/dbfs/ml` and Petastorm for Efficient Data Access
+# MAGIC  
+# MAGIC Petastorm is an open source data access library. This library enables single-node or distributed training and evaluation of deep learning models directly from datasets in Apache Parquet format and datasets that are already loaded as Apache Spark DataFrames. Petastorm supports popular Python-based machine learning (ML) frameworks such as Tensorflow, PyTorch, and PySpark. For more information about Petastorm, refer to the Petastorm GitHub page and Petastorm API documentation.
 
 # COMMAND ----------
 
 # Set a cache directory on DBFS FUSE for intermediate data.
 spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, "file:///dbfs/tmp/petastorm/cache")
 
-converter_train = make_spark_converter(train_data) #add repartition
-convertor_val = make_spark_converter(val_data)
+converter_train = make_spark_converter(df_train)
+converter_val = make_spark_converter(df_val)
 
 # COMMAND ----------
 
-IMG_SHAPE = (299, 299, 3)
 img_size = 299
 
 def preprocess(content):
   """
-  Preprocess an image file bytes for MobileNetV2 (ImageNet).
+  Preprocess an image file bytes for model
   """
-  image = Image.open(io.BytesIO(content)).resize([img_size, img_size])
-  image_array = keras.preprocessing.image.img_to_array(image)
+  image = Image.open(io.BytesIO(content)).convert('RGB')
+  # Scale image down
+  image.thumbnail((img_size, img_size), Image.ANTIALIAS)
+  x, y = image.size
+  # Add border to make it square
+  with_bg = Image.new('RGB', (img_size, img_size), (255, 255, 255))
+  with_bg.paste(image, box=((img_size - x) // 2, (img_size - y) // 2))
+  image_array = keras.preprocessing.image.img_to_array(with_bg)
   return preprocess_input(image_array)
 
 def transform_row(pd_batch):
   """
   The input and output of this function are pandas dataframes.
   """
-  pd_batch['features'] = pd_batch['image'].map(lambda x: preprocess(x))
-  pd_batch = pd_batch.drop(labels='image', axis=1)
+  pd_batch['features'] = pd_batch['content'].map(lambda x: preprocess(x))
+  pd_batch = pd_batch.drop(labels='content', axis=1)
   return pd_batch
 
 # The output shape of the `TransformSpec` is not automatically known by petastorm, 
@@ -122,51 +157,6 @@ transform_spec_fn = TransformSpec(
   edit_fields=[('features', np.float32, IMG_SHAPE, False)], 
   selected_fields=['features', 'label']
 )
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC From the Parquet table representation, the image data needs some further transformations that are specific to the Keras model used below. They're reshaped again to 299x299(x3), and normalized to [-1,1]. To start, we'll just work with a sample of the train set in memory, and construct a train/test split of the images and labels from there.
-
-# COMMAND ----------
-
-from petastorm import make_batch_reader
-from petastorm.tf_utils import make_petastorm_dataset
-import tensorflow as tf
-from tensorflow.data.experimental import unbatch
-from tensorflow.io import decode_raw
-from tensorflow.keras.applications.xception import preprocess_input
-from tensorflow.keras.layers import Dropout
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-
-img_size = 299
-
-# Defines a transformation on petastorm data using TF APIs that reshapes and encodes the input.
-# This include shuffling and rebatching the data to the desired batch size.
-def transform_reader(reader, batch_size):
-  def transform_input(x):
-    img_bytes = tf.reshape(decode_raw(x.image, tf.uint8), (-1,img_size,img_size,3))
-    inputs = preprocess_input(tf.cast(img_bytes, tf.float32))
-    outputs = x.label - 1
-    return (inputs, outputs)
-  # unbatch() is important as the batches from petastorm may vary in size, and have to be 'rebatched'
-  # Shuffling across the batches from petastorm mixes up the input a little better
-  return make_petastorm_dataset(reader).map(transform_input).apply(unbatch()).shuffle(400, seed=42).batch(batch_size, drop_remainder=True)
-
-# COMMAND ----------
-
-path_base = "/dbfs/ml/images/tables/pq/"
-checkpoint_path = path_base + "checkpoint"
-
-table_path_base = path_base
-table_path_base_file = "file:" + table_path_base
-
-# cur_shard and shard_count will be used later
-def make_caching_reader(suffix, cur_shard=None, shard_count=None):
-  return make_batch_reader(table_path_base_file + suffix, num_epochs=None,
-                           cur_shard=cur_shard, shard_count=shard_count,
-                           cache_type='local-disk', cache_location="/tmp/" + suffix, cache_size_limit=20000000000, # 20GB
-                           cache_row_size_estimate=img_size * img_size * 3)
 
 # COMMAND ----------
 
@@ -190,12 +180,8 @@ mlflow.tensorflow.autolog()
 experiment_name = f"/Users/{user}/Deep Learning Image Demo"
 mlflow.set_experiment(experiment_name)
 
-# COMMAND ----------
 
-import os
-import tempfile
-from sparkdl import HorovodRunner
-import random
+# COMMAND ----------
 
 # Save Horovod timeline for later analysis
 output_base = "/tmp/keras_horovodrunner_mlflow/"
@@ -227,8 +213,12 @@ import json
 BATCH_SIZE = 32
 num_gpus = 4
 epochs = 12
-databricks_host = json.loads(dbutils.notebook.entry_point.getDbutils().notebook().getContext().toJson())
+databricks_host = 'https://adb-1195374632604107.7.azuredatabricks.net' #json.loads(dbutils.notebook.entry_point.getDbutils().notebook().getContext().toJson())
 databricks_token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
+path_base = "/tmp/ok/images/"
+checkpoint_path = path_base + "checkpoint"
+dbutils.fs.rm("file:" + checkpoint_path, recurse=True)
+dbutils.fs.mkdirs("file:" + checkpoint_path)
 
 def train_hvd():
   hvd.init()
@@ -251,7 +241,7 @@ def train_hvd():
   with converter_train.make_tf_dataset(transform_spec=transform_spec_fn, 
                                        cur_shard=hvd.rank(), shard_count=hvd.size(),
                                        batch_size=BATCH_SIZE) as train_reader, \
-       convertor_val.make_tf_dataset(transform_spec=transform_spec_fn, 
+       converter_val.make_tf_dataset(transform_spec=transform_spec_fn, 
                                      cur_shard=hvd.rank(), shard_count=hvd.size(),
                                      batch_size=BATCH_SIZE) as test_reader:
      # tf.keras only accept tuples, not namedtuples
@@ -260,7 +250,7 @@ def train_hvd():
 
       test_dataset = test_reader.map(lambda x: (x.features, x.label))
       
-      validation_steps = max(1, len(convertor_val) // (BATCH_SIZE * hvd.size()))
+      validation_steps = max(1, len(converter_val) // (BATCH_SIZE * hvd.size()))
       model = build_model(dropout=0.5)
 
       optimizer = Nadam(lr=0.016)
@@ -292,7 +282,7 @@ def train_hvd():
       if hvd.rank() == 0:        
         # Log events to MLflow
         with mlflow.start_run(run_id = active_run_uuid):
-          mlflow.log_params({"mode": process_mode, "epochs": epochs, "batch_size": batch_size})
+          mlflow.log_params({"mode": process_mode, "epochs": epochs, "batch_size": BATCH_SIZE})
 
           #mlflow.log_metrics({"Test Loss": score[0], "Test Accuracy": score[1], "Duration": elapsed_time})
 
@@ -307,13 +297,8 @@ def train_hvd():
 with mlflow.start_run() as run:
   active_run_uuid = mlflow.active_run().info.run_uuid
   process_mode = "hvd (distributed)"  
-  hr = HorovodRunner(np=3)
+  hr = HorovodRunner(np=2)
   hr.run(train_hvd)          
-
-# COMMAND ----------
-
-# MAGIC %fs
-# MAGIC ls /tmp/256_ObjectCategories/
 
 # COMMAND ----------
 
@@ -353,26 +338,6 @@ version_info = client.create_model_version(
 
 # COMMAND ----------
 
-# Wait until the model is ready
-from mlflow.tracking.client import MlflowClient
-from mlflow.entities.model_registry.model_version_status import ModelVersionStatus
-
-def wait_until_ready(model_name, model_version):
-  client = MlflowClient()
-  for _ in range(30):
-    model_version_details = client.get_model_version(
-      name=model_name,
-      version=model_version,
-    )
-    status = ModelVersionStatus.from_string(model_version_details.status)
-    print("Model status: %s" % ModelVersionStatus.to_string(status))
-    if status == ModelVersionStatus.READY:
-      break
-    time.sleep(1)
-wait_until_ready(version_info.name, version_info.version)
-
-# COMMAND ----------
-
 # MAGIC   %md
 # MAGIC Now that the model has been registered, we can move forward with our process of validation, governance, testing, etc. We could trigger the next step in this process by moving the model to the _Staging_ stage in the registry. Using MLflow webhooks, we could trigger an automatic process, notification, or next manual step. 
 
@@ -388,3 +353,7 @@ staging_model = client.transition_model_version_stage(model_name, version_info.v
 # COMMAND ----------
 
 production_model = client.transition_model_version_stage(model_name, version_info.version, stage="Production")
+
+# COMMAND ----------
+
+
