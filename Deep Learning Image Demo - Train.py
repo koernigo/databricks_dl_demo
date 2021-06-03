@@ -11,17 +11,18 @@ from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Nadam
 from tensorflow.keras.layers import Dropout
-from petastorm.spark import SparkDatasetConverter, make_spark_converter
-from petastorm import TransformSpec
-from petastorm import make_batch_reader
-from petastorm.tf_utils import make_petastorm_dataset
 import tensorflow as tf
 from tensorflow.data.experimental import unbatch
 from tensorflow.io import decode_raw
-from tensorflow.keras.applications.xception import preprocess_input
-from tensorflow.keras.layers import Dropout
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras import backend as K
+
+from petastorm.spark import SparkDatasetConverter, make_spark_converter
+from petastorm import TransformSpec
+from petastorm.tf_utils import make_petastorm_dataset
+
 from pyspark.sql.functions import col
+
 import math
 import time
 import json
@@ -31,39 +32,16 @@ import os
 import tempfile
 from sparkdl import HorovodRunner
 import random
-from pyspark.sql.functions import col
-
-from petastorm.spark import SparkDatasetConverter, make_spark_converter
-
 import io
-import numpy as np
-import tensorflow as tf
 from PIL import Image
-from petastorm import TransformSpec
-from tensorflow import keras
-from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
-
-from hyperopt import fmin, tpe, hp, SparkTrials, STATUS_OK
 
 import horovod.tensorflow.keras as hvd
 from sparkdl import HorovodRunner
 
 # COMMAND ----------
 
-dbutils.widgets.text("table_path","/ml/images/tables/")
-table_path=dbutils.widgets.get("table_path")
-dbutils.widgets.text("image_path","/tmp/ok/images/")
-image_path = dbutils.widgets.get("image_path")
-table_path=dbutils.widgets.get("table_path")
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC configurations
-
-# COMMAND ----------
-
-IMG_SHAPE = (299, 299, 3)
+# MAGIC %sql
+# MAGIC use dl_demo;
 
 # COMMAND ----------
 
@@ -72,7 +50,9 @@ IMG_SHAPE = (299, 299, 3)
 
 # COMMAND ----------
 
-# Additional options here will be used later:
+IMG_SHAPE = (299, 299, 3)
+img_size = IMG_SHAPE[0]
+
 def build_model(dropout=None):
   model = Sequential()
   xception = Xception(include_top=False, input_shape=IMG_SHAPE, pooling='avg')
@@ -86,19 +66,11 @@ def build_model(dropout=None):
 
 # COMMAND ----------
 
-path_base = image_path
-checkpoint_path = path_base + "checkpoint"
-dbutils.fs.rm("file:" + checkpoint_path, recurse=True)
-dbutils.fs.mkdirs("file:" + checkpoint_path)
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC now we load in the data
 
 # COMMAND ----------
 
-spark.sql("USE dl_demo")
 full_data = spark.table("labeled_images").select("content", "label")
 df_train, df_val = full_data.randomSplit([0.9, 0.1], seed=12345)
 
@@ -125,8 +97,6 @@ converter_val = make_spark_converter(df_val)
 
 # COMMAND ----------
 
-img_size = 299
-
 def preprocess(content):
   """
   Preprocess an image file bytes for model
@@ -139,6 +109,7 @@ def preprocess(content):
   with_bg = Image.new('RGB', (img_size, img_size), (255, 255, 255))
   with_bg.paste(image, box=((img_size - x) // 2, (img_size - y) // 2))
   image_array = keras.preprocessing.image.img_to_array(with_bg)
+  
   return preprocess_input(image_array)
 
 def transform_row(pd_batch):
@@ -172,17 +143,6 @@ mlflow.tensorflow.autolog()
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC We will set the experiment so that we can track our training using MLfFlow. If we did not do this, MLflow would track to a notebook scoped experiment automatically.  
-
-# COMMAND ----------
-
-experiment_name = f"/Users/{user}/Deep Learning Image Demo"
-mlflow.set_experiment(experiment_name)
-
-
-# COMMAND ----------
-
 # Save Horovod timeline for later analysis
 output_base = "/tmp/keras_horovodrunner_mlflow/"
 dbutils.fs.rm(output_base, recurse=True)
@@ -202,23 +162,20 @@ help(HorovodRunner)
 
 # COMMAND ----------
 
-import horovod.tensorflow.keras as hvd
-from tensorflow.keras import backend as K
-import tensorflow as tf
-from sparkdl import HorovodRunner
-import math
-import time
-import json
+databricks_host = json.loads(dbutils.notebook.entry_point.getDbutils().notebook().getContext().toJson())["extraContext"]["api_url"]
+databricks_token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
+
+checkpoint_path = "/tmp/ok/images/checkpoint"
+dbutils.fs.rm("file:" + checkpoint_path, recurse=True)
+dbutils.fs.mkdirs("file:" + checkpoint_path)
+
+# COMMAND ----------
 
 BATCH_SIZE = 32
 num_gpus = 4
 epochs = 12
-databricks_host = 'https://adb-1195374632604107.7.azuredatabricks.net' #json.loads(dbutils.notebook.entry_point.getDbutils().notebook().getContext().toJson())
-databricks_token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
-path_base = "/tmp/ok/images/"
-checkpoint_path = path_base + "checkpoint"
-dbutils.fs.rm("file:" + checkpoint_path, recurse=True)
-dbutils.fs.mkdirs("file:" + checkpoint_path)
+
+# COMMAND ----------
 
 def train_hvd():
   hvd.init()

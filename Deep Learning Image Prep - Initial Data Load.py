@@ -48,3 +48,7 @@ image_df = raw_image_df.withColumn("label",file_to_label_udf("path"))
 # COMMAND ----------
 
 image_df.write.format("delta").mode("overwrite").option("mergeSchema", True).saveAsTable("labeled_images")
+
+# COMMAND ----------
+
+
