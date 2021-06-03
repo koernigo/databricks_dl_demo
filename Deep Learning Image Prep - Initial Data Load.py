@@ -6,11 +6,8 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("table_path","/ml/images/tables/")
-table_path=dbutils.widgets.get("table_path")
 dbutils.widgets.text("image_path","/tmp/256_ObjectCategories/")
 caltech_256_path = dbutils.widgets.get("image_path")
-table_path=dbutils.widgets.get("table_path")
 
 # COMMAND ----------
 
@@ -51,7 +48,3 @@ image_df = raw_image_df.withColumn("label",file_to_label_udf("path"))
 # COMMAND ----------
 
 image_df.write.format("delta").mode("overwrite").option("mergeSchema", True).saveAsTable("labeled_images")
-
-# COMMAND ----------
-
-
