@@ -19,16 +19,16 @@ table_path=dbutils.widgets.get("table_path")
 
 # COMMAND ----------
 
-a = [1,2,3,4,5]
-a[-2]
+# MAGIC %md
+# MAGIC A pandas user-defined function (UDF)—also known as vectorized UDF—is a user-defined function that uses Apache Arrow to transfer data and pandas to work with the data. pandas UDFs allow vectorized operations that can increase performance up to 100x compared to row-at-a-time Python UDFs.
+# MAGIC 
+# MAGIC Here we create a Pandas UDF that parses the file name of the image and returns the label. 
 
 # COMMAND ----------
 
-import io
 import numpy as np
-from PIL import Image
-from pyspark.sql.types import BinaryType, IntegerType
-from pyspark.sql.functions import col, pandas_udf
+from pyspark.sql.types import IntegerType
+from pyspark.sql.functions import pandas_udf
 
 def file_to_label(path):
   # .../043.coin/043_0042.jpg -> 043.coin -> 043 -> 43
@@ -41,23 +41,16 @@ file_to_label_udf = pandas_udf(file_to_label, IntegerType())
 
 # COMMAND ----------
 
-import io
-import numpy as np
-from PIL import Image
-from pyspark.sql.types import BinaryType, IntegerType
-
-# COMMAND ----------
-
 raw_image_df = spark.read.format("binaryFile") \
                   .option("pathGlobFilter", "*.jpg") \
                   .option("recursiveFileLookup", "true") \
-                   .load(caltech_256_path).limit(100)
+                   .load(caltech_256_path)
 
-image_df = raw_image_df.withColumn("label",file_to_label_udf("path")).cache()
+image_df = raw_image_df.withColumn("label",file_to_label_udf("path"))
 
 # COMMAND ----------
 
-image_df.write.format("delta").mode("overwrite").saveAsTable("labeled_images")
+image_df.write.format("delta").mode("overwrite").option("mergeSchema", True).saveAsTable("labeled_images")
 
 # COMMAND ----------
 
