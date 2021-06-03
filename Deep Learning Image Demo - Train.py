@@ -1,4 +1,11 @@
 # Databricks notebook source
+dbutils.widgets.text("experiment_name","DL_Image_Classification")
+experiment_name=dbutils.widgets.get("experiment_name")
+dbutils.widgets.text("job_user","oliver.koernig@databricks.com")
+job_user=dbutils.widgets.get("job_user")
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC Imports
 
@@ -143,6 +150,17 @@ mlflow.tensorflow.autolog()
 
 # COMMAND ----------
 
+experiment_path=f"/Users/{job_user}/{experiment_name}"
+print (experiment_path)
+experiment_id_object = mlflow.get_experiment_by_name(experiment_path)
+if experiment_id_object is None:
+  experiment_id = mlflow.create_experiment(experiment_path)
+  experiment_id_object = mlflow.get_experiment(experiment_id)
+print(experiment_id_object)
+mlflow.set_experiment(experiment_id_object.name)
+
+# COMMAND ----------
+
 # Save Horovod timeline for later analysis
 output_base = "/tmp/keras_horovodrunner_mlflow/"
 dbutils.fs.rm(output_base, recurse=True)
@@ -259,6 +277,10 @@ with mlflow.start_run() as run:
 
 # COMMAND ----------
 
+dbutils.notebook.exit(run.run_id)
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## The MlFlow Model Registry
 # MAGIC 
@@ -274,9 +296,10 @@ with mlflow.start_run() as run:
 # make sure your model name is in the widget for this notebook
 model_name = "deep_learning_demo"
 client = mlflow.tracking.MlflowClient()
-
-client.create_registered_model(model_name)
-
+try:
+  client.create_registered_model(model_name)
+except:
+  print("Model already exists, ignoring create model statement")
 registered_model = client.get_registered_model(model_name)
 registered_model
 
@@ -284,6 +307,10 @@ registered_model
 
 # MAGIC %md
 # MAGIC Now we can add a model version to this model by creating a version of the best model we trained.
+
+# COMMAND ----------
+
+print(run.info)
 
 # COMMAND ----------
 

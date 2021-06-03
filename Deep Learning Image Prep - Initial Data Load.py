@@ -2,7 +2,7 @@
 # MAGIC %md
 # MAGIC ## Data Preparation - Initial Data Load
 # MAGIC 
-# MAGIC This loads the Caltech 256 images from .jpg files and extracts the label from the file name. The result is written a Delta table. This only needs to be run once. Manually labelled images can later be added to this table for increased training set. 
+# MAGIC This loads the Caltech 256 images from .jpg files and extracts the label from the file name. The result is written into a Delta table. This only needs to be run once. Manually labelled images can later be added to this table for increased training set. 
 
 # COMMAND ----------
 
@@ -48,7 +48,3 @@ image_df = raw_image_df.withColumn("label",file_to_label_udf("path"))
 # COMMAND ----------
 
 image_df.write.format("delta").mode("overwrite").option("mergeSchema", True).saveAsTable("labeled_images")
-
-# COMMAND ----------
-
-
