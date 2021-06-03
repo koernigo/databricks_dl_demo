@@ -7,20 +7,24 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("table_path","/ml/images/tables/")
-table_path=dbutils.widgets.get("table_path")
-dbutils.widgets.text("image_path","/mnt/poc/images/caltech_256/")
-image_path = dbutils.widgets.get("image_path")
-table_path=dbutils.widgets.get("table_path")
+# MAGIC %sql
+# MAGIC use dl_demo
 
 # COMMAND ----------
 
-raw_image_df = spark.read.format("binaryFile").option("pathGlobFilter", "*.jpg").option("recursiveFileLookup", "true").load(image_path).repartition(64).limit(100)
+dbutils.widgets.text("image_path","/tmp/256_ObjectCategories/")
+image_path = dbutils.widgets.get("image_path")
+
+# COMMAND ----------
+
+raw_image_df = spark.read.format("binaryFile") \
+                    .option("pathGlobFilter", "*.jpg") \
+                    .option("recursiveFileLookup", "true") \
+                    .load(image_path).repartition(64).limit(100)
 
 # COMMAND ----------
 
 from pyspark.sql.functions import current_date
-
 
 df_with_date = raw_image_df.withColumn("load_date", current_date())
 df_with_date.write.partitionBy("load_date").format("delta").mode("append").option("mergeSchema", "true").saveAsTable("new_images")

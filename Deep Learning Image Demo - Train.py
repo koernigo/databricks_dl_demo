@@ -71,7 +71,7 @@ def build_model(dropout=None):
 
 # COMMAND ----------
 
-full_data = spark.table("labeled_images").select("content", "label")
+full_data = spark.table("labeled_images").select("content", "label").limit(1000)
 df_train, df_val = full_data.randomSplit([0.9, 0.1], seed=12345)
 
 num_classes = full_data.select("label").distinct().count()

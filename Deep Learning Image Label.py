@@ -9,6 +9,11 @@ table_path=dbutils.widgets.get("table_path")
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC use dl_demo
+
+# COMMAND ----------
+
 import boto3
 
 client = boto3.client('sagemaker-a2i-runtime', 'east-us-2')
@@ -95,7 +100,7 @@ for resp in completed_human_loops:
 
 # COMMAND ----------
 
-#last step : Insert manually labeled images back into the main Delta Table  image_label_results
+#last step : Insert manually labeled images back into the main Delta Table  image_label_results with a indicator that they are manually labeled. These can then flow into the labeled_images table as well !!!
 
 # COMMAND ----------
 

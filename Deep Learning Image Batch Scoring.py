@@ -2,7 +2,12 @@
 # MAGIC %md
 # MAGIC Deep Learning Image Batch Scoring
 # MAGIC 
-# MAGIC This is a daily job that scores all images in the new_images table and appens the detailed into the image_label_results table
+# MAGIC This is a daily job that scores all images in the new_images table that are from the current date and appends the detailed into the image_label_results table
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC use dl_demo
 
 # COMMAND ----------
 
@@ -16,18 +21,17 @@ print("MLflow Version: %s" % mlflow.__version__)
 import io
 import numpy as np
 from PIL import Image
-from pyspark.sql.types import BinaryType, IntegerType
+from pyspark.sql.types import IntegerType
 from tensorflow.keras.applications.xception import preprocess_input
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
 import pandas as pd
-import pandas as pd
-import numpy as np
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as f
 from pyspark.sql.types import *
 import mlflow
 import mlflow.pyfunc
+from tensorflow import keras
 
 # COMMAND ----------
 
@@ -37,11 +41,16 @@ client = mlflow.tracking.MlflowClient()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Here we are reading in the Delta table with the new images from the last step as a Spark DataFrame.
+# MAGIC %md
+# MAGIC ### Data Preparation for Image Scoring
+# MAGIC 
+# MAGIC This loads the new batch of images to be scored (for the demo, it's the same set of images) from the `new_images` table we created in the last step. 
 
 # COMMAND ----------
 
-df = spark.table("new_images") 
+df = spark.table("new_images")
+max_date = df.agg({"load_date": "max"}).first()[0]
+df_new = df.filter(df.load_date == max_date)
 
 # COMMAND ----------
 
@@ -69,9 +78,6 @@ schema = StructType(schema_list + label_list + pred_list)
 # COMMAND ----------
 
 img_size = 299
-from tensorflow import keras
-
-# COMMAND ----------
 
 def scale_image(image_bytes):
   image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
@@ -86,10 +92,6 @@ def scale_image(image_bytes):
 scale_image_udf = udf(scale_image, BinaryType())
 
 # COMMAND ----------
-
-import pandas as pd
-
-img_size = 299
 
 def predict_match_udf(image_dfs):
   #This loads the latest image scoring production model from the model registry
@@ -116,7 +118,7 @@ def predict_match_udf(image_dfs):
 
 # COMMAND ----------
 
-image_df = df.withColumn("image", scale_image_udf("content"))
+image_df = df_new.withColumn("image", scale_image_udf("content"))
 preds = image_df.mapInPandas(predict_match_udf, schema=schema)
 
 # COMMAND ----------
