@@ -4,10 +4,12 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("run_id","5bea8902912342c49f375a0b4d256fa6")
-run_id = dbutils.widgets.get("run_id")
 dbutils.widgets.text("model_name","deep_learning_demo")
 model_name = dbutils.widgets.get("model_name")
+dbutils.widgets.text("experiment_name","DL_Image_Classification")
+experiment_name = dbutils.widgets.get("experiment_name")
+dbutils.widgets.text("job_user","oliver.koernig@databricks.com")
+job_user=dbutils.widgets.get("job_user")
 
 # COMMAND ----------
 
@@ -16,6 +18,20 @@ print("MLflow Version: %s" % mlflow.__version__)
 
 # COMMAND ----------
 
+#Find Experiment path for the given name and set the experiment
+experiment_path=f"/Users/{job_user}/{experiment_name}"
+print (experiment_path)
+mlflow.set_experiment(experiment_path)
+
+# COMMAND ----------
+
+mlflow.search_runs().loc(0)
+
+# COMMAND ----------
+
+#get the run_id from the latest run within the given experiment and retrieve that run
+run_id = mlflow.search_runs().iloc[0,0]
+print(run_id)
 run = mlflow.get_run(run_id)
 
 # COMMAND ----------
