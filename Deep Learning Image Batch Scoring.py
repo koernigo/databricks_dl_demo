@@ -157,7 +157,3 @@ preds.write.format("delta") \
 
 # MAGIC %sql
 # MAGIC --drop table if exists image_label_results
-
-# COMMAND ----------
-
-
