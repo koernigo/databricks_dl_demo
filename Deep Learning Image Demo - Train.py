@@ -84,8 +84,8 @@ df_train, df_val = full_data.randomSplit([0.9, 0.1], seed=12345)
 num_classes = full_data.select("label").distinct().count()
 
 # Make sure the number of partitions is at least the number of workers which is required for distributed training.
-df_train = df_train.repartition(2)
-df_val = df_val.repartition(2)
+df_train = df_train.repartition(8)
+df_val = df_val.repartition(8)
 
 # COMMAND ----------
 
@@ -185,7 +185,7 @@ dbutils.fs.mkdirs("file:" + checkpoint_path)
 # COMMAND ----------
 
 BATCH_SIZE = 32
-num_gpus = 4
+num_gpus = 8
 epochs = 12
 
 # COMMAND ----------
@@ -238,7 +238,7 @@ def train_hvd():
         callbacks.append(ModelCheckpoint(checkpoint_path + "/checkpoint-{epoch}.ckpt", save_weights_only=True, verbose=1))
 
       # See comment above on batch_size * num_gpus
-      model.fit(train_dataset, epochs=hvd_epochs, steps_per_epoch=steps_per_epoch,
+      hist = model.fit(train_dataset, epochs=hvd_epochs, steps_per_epoch=steps_per_epoch,
                 validation_data=test_dataset, validation_steps=validation_steps,
                 verbose=(2 if hvd.rank() == 0 else 0), callbacks=callbacks)
       
@@ -253,8 +253,7 @@ def train_hvd():
         # Log events to MLflow
         with mlflow.start_run(run_id = active_run_uuid):
           mlflow.log_params({"mode": process_mode, "epochs": epochs, "batch_size": BATCH_SIZE})
-
-          #mlflow.log_metrics({"Test Loss": score[0], "Test Accuracy": score[1], "Duration": elapsed_time})
+          mlflow.log_metrics({"Test Loss":  hist.history['val_loss'][-1], "Test Accuracy": hist.history['val_acc'][-1], "Duration": elapsed_time})
 
           mlflow.keras.log_model(model, "models")
 
@@ -267,5 +266,9 @@ def train_hvd():
 with mlflow.start_run() as run:
   active_run_uuid = mlflow.active_run().info.run_uuid
   process_mode = "hvd (distributed)"  
-  hr = HorovodRunner(np=2)
+  hr = HorovodRunner(np=8)
   hr.run(train_hvd)          
+
+# COMMAND ----------
+
+

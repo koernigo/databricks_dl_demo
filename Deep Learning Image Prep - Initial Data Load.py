@@ -55,4 +55,9 @@ image_df.write.format("delta").mode("overwrite").option("mergeSchema", True).sav
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC optimize image_data
+
+# COMMAND ----------
+
 
