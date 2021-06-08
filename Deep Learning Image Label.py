@@ -4,11 +4,6 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("table_path","/tmp/ok/binary/caltech_256_image/")
-table_path=dbutils.widgets.get("table_path")
-
-# COMMAND ----------
-
 # MAGIC %sql
 # MAGIC use dl_demo
 
@@ -26,9 +21,14 @@ client = boto3.client('sagemaker-a2i-runtime', 'east-us-2')
 
 import json
 #read new images to be processed from label table
-new_images_tobe_labeled = spark.sql("select * from image_label_results where load_date = current_date() and predicted_score < 99")
+new_images_tobe_labeled = spark.sql("select * from image_data where predicted_score < 95 and predicted_score is not null")
+
 #Write to json
-result= new_images_tobe_labeled.select("path","predicted_label").write.mode("overwrite").option("multiline","false").json(dbutils.widgets.get("table_path")+"/new_images.json")
+result = new_images_tobe_labeled \
+  .select("path","predicted_label") \
+  .write.mode("overwrite") \
+  .option("multiline","false") \
+  .json("/tmp/new_images.json")
 
 json_images = new_images_tobe_labeled.toJSON().collect()
 

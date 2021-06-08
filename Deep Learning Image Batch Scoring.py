@@ -48,9 +48,8 @@ client = mlflow.tracking.MlflowClient()
 
 # COMMAND ----------
 
-df = spark.table("new_images")
-max_date = df.agg({"load_date": "max"}).first()[0]
-df_new = df.filter(df.load_date == max_date)
+df = spark.table("image_data")
+df_new = df.filter("label is NULL AND predicted_label is NULL").select("path", "modificationTime", "length", "content", "label", "load_date")
 
 # COMMAND ----------
 
@@ -66,7 +65,9 @@ schema_list = [
 StructField("path", StringType(),True),
 StructField("modificationTime", TimestampType(),True),
 StructField("length",LongType(),True),
-StructField("load_date",DateType(),True)]
+StructField("content", BinaryType(), True),
+StructField("label", IntegerType(), True),
+StructField("load_date", DateType(),True)]
 
 label_list = [StructField("label_{}".format(i), FloatType(), True) for i in range(num_labels)]
 
@@ -111,7 +112,7 @@ def predict_match_udf(image_dfs):
     
     final_df["predicted_score"] = predicted_scores
     final_df["predicted_label"] = predicted_labels
-    final_df.drop(columns=["content", "image"], inplace=True)
+    final_df.drop(columns=["image"], inplace=True)
     
     yield pd.DataFrame(final_df)
  
@@ -123,7 +124,7 @@ preds = image_df.mapInPandas(predict_match_udf, schema=schema)
 
 # COMMAND ----------
 
-display(preds)
+preds.createOrReplaceTempView("preds")
 
 # COMMAND ----------
 
@@ -131,11 +132,22 @@ display(preds)
 
 # COMMAND ----------
 
-preds.write.format("delta") \
-              .partitionBy("load_date") \
-              .mode("append") \
-              .option("mergeSchema", "true") \
-              .saveAsTable("image_label_results")
+from delta.tables import *
+
+image_table = DeltaTable.forName(spark, "image_data")
+
+# COMMAND ----------
+
+updates = {f'images.{col}':f'updates.{col}' for col in schema.names[1:]}
+
+# COMMAND ----------
+
+image_table.alias("images").merge(
+    preds.alias("updates"),
+     "images.path = updates.path") \
+  .whenMatchedUpdate(set = updates ) \
+  .whenNotMatchedInsertAll() \
+  .execute()
 
 # COMMAND ----------
 
@@ -145,15 +157,6 @@ preds.write.format("delta") \
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC --- Only need to run this for the first time, it will fail otherwise
-# MAGIC ---alter table image_label_results ADD COLUMNS (manual_label FLOAT)
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC select * from image_label_results
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC --drop table if exists image_label_results
+# MAGIC select *
+# MAGIC from image_data
+# MAGIC where predicted_label is null and label is null

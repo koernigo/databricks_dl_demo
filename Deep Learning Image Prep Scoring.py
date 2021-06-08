@@ -27,4 +27,13 @@ raw_image_df = spark.read.format("binaryFile") \
 from pyspark.sql.functions import current_date
 
 df_with_date = raw_image_df.withColumn("load_date", current_date())
-df_with_date.write.partitionBy("load_date").format("delta").mode("append").option("mergeSchema", "true").saveAsTable("new_images")
+df_with_date.write.format("delta").mode("append").option("mergeSchema", "true").saveAsTable("image_data")
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from dl_demo.image_data where label is null
+
+# COMMAND ----------
+
+
