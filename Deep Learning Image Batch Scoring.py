@@ -160,13 +160,3 @@ image_table.alias("images").merge(
 # MAGIC select *
 # MAGIC from image_data
 # MAGIC where predicted_label is null and label is null
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC select *
-# MAGIC from image_data where predicted_label is not null
-
-# COMMAND ----------
-
-
