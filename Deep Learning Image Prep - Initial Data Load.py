@@ -1,4 +1,8 @@
 # Databricks notebook source
+from pyspark.sql.functions import current_date
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Data Preparation - Initial Data Load
 # MAGIC 
@@ -43,8 +47,12 @@ raw_image_df = spark.read.format("binaryFile") \
                   .option("recursiveFileLookup", "true") \
                    .load(caltech_256_path)
 
-image_df = raw_image_df.withColumn("label",file_to_label_udf("path"))
+image_df = raw_image_df.withColumn("label",file_to_label_udf("path")).withColumn("load_date", current_date())
 
 # COMMAND ----------
 
-image_df.write.format("delta").mode("overwrite").option("mergeSchema", True).saveAsTable("labeled_images")
+image_df.write.format("delta").mode("overwrite").option("mergeSchema", True).saveAsTable("image_data")
+
+# COMMAND ----------
+
+
