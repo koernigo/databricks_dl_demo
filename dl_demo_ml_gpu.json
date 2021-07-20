@@ -1,0 +1,23 @@
+{
+    "num_workers": 4,
+    "cluster_name": "dl-demo-ml-gpu",
+    "spark_version": "8.2.x-gpu-ml-scala2.12",
+    "spark_conf": {
+        "spark.databricks.delta.preview.enabled": "true"
+    },
+    "azure_attributes": {
+        "first_on_demand": 1,
+        "availability": "SPOT_WITH_FALLBACK_AZURE",
+        "spot_bid_max_price": -1
+    },
+    "node_type_id": "Standard_NC12",
+    "driver_node_type_id": "Standard_NC12",
+    "ssh_public_keys": [],
+    "custom_tags": {},
+    "spark_env_vars": {},
+    "autotermination_minutes": 120,
+    "enable_elastic_disk": true,
+    "cluster_source": "UI",
+    "init_scripts": [],
+    "cluster_id": "0602-102529-bandy637"
+}
