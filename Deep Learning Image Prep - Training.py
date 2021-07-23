@@ -4,9 +4,9 @@ from pyspark.sql.functions import current_date, col
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Data Preparation - Initial Data Load
+# MAGIC ## Data Preparation - Training
 # MAGIC 
-# MAGIC This loads the Caltech 256 images from .jpg files and extracts the label from the file name. The result is written into a Delta table. This only needs to be run once. Manually labelled images can later be added to this table for increased training set. 
+# MAGIC This loads the Caltech 256 images from .jpg files and extracts the label from the file name. The result is written into a Delta table. If new labeled images are added, autoloader will pick them up on subsequent runs. 
 
 # COMMAND ----------
 
@@ -42,25 +42,38 @@ file_to_label_udf = pandas_udf(file_to_label, IntegerType())
 
 # COMMAND ----------
 
-raw_image_df = spark.read.format("binaryFile") \
-                  .option("pathGlobFilter", "*.jpg") \
-                  .option("recursiveFileLookup", "true") \
-                   .load(caltech_256_path)
+#raw_image_df = spark.read.format("binaryFile") \
+#                  .option("pathGlobFilter", "*.jpg") \
+#                  .option("recursiveFileLookup", "true") \
+      #             .load(caltech_256_path)
+
+
+
+raw_image_df = spark.readStream.format("cloudFiles") \
+              .option("cloudFiles.format", "binaryFile") \
+              .option("recursiveFileLookup", "true") \
+              .option("pathGlobFilter", "*.jpg") \
+              .load(caltech_256_path) 
+
 
 image_df = raw_image_df.withColumn("label",file_to_label_udf("path")) \
                        .withColumn("load_date", current_date())
 
 # COMMAND ----------
 
-image_df_filter = image_df.filter(~col("path") \
-                          .rlike( "dbfs:\/tmp\/256_ObjectCategories\/.*\/.*_0001.jpg"))
+raw_image_df.writeStream \
+  .format("delta") \
+  .option("checkpointLocation", "/tmp/chkpt/dl_demo/training/image_data") \
+  .trigger(once=True) \
+  .option("mergeSchema", True) \
+  .start("/tmp/dl_demo/images_data")
 
 # COMMAND ----------
 
-image_df_filter.write.format("delta") \
-                     .mode("overwrite") \
-                     .option("mergeSchema", True) \
-                     .saveAsTable("image_data")
+#image_df_filter.write.format("delta") \
+#                     .mode("overwrite") \
+#                     .option("mergeSchema", True) \
+#                     .saveAsTable("image_data")
 
 # COMMAND ----------
 
