@@ -1,2 +1,2 @@
 # databricks_dl_demo
-Demo's a set of end-to-end pipelines for image classifciation
+Demos a set of end-to-end pipelines for image classification using Jobs Orchestration
