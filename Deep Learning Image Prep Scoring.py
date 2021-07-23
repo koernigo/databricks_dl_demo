@@ -36,7 +36,7 @@ df_with_date = raw_image_df_filter.withColumn("load_date", current_date())
 
 # COMMAND ----------
 
-display(df_with_date)
+#display(df_with_date)
 
 # COMMAND ----------
 
@@ -53,7 +53,3 @@ df_with_date.writeStream \
 
 # MAGIC %sql
 # MAGIC select * from dl_demo.image_data where label is null
-
-# COMMAND ----------
-
-
