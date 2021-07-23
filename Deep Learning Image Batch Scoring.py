@@ -2,7 +2,16 @@
 # MAGIC %md
 # MAGIC Deep Learning Image Batch Scoring
 # MAGIC 
-# MAGIC This is a daily job that scores all images in the new_images table and appens the detailed into the image_label_results table
+# MAGIC This is a daily job that scores all images in the new_images table that are from the current date and appends the detailed into the image_label_results table
+
+# COMMAND ----------
+
+spark.conf.set("spark.databricks.delta.schema.autoMerge.enabled", "true")
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC use dl_demo
 
 # COMMAND ----------
 
@@ -16,18 +25,17 @@ print("MLflow Version: %s" % mlflow.__version__)
 import io
 import numpy as np
 from PIL import Image
-from pyspark.sql.types import BinaryType, IntegerType
+from pyspark.sql.types import IntegerType
 from tensorflow.keras.applications.xception import preprocess_input
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
 import pandas as pd
-import pandas as pd
-import numpy as np
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as f
 from pyspark.sql.types import *
 import mlflow
 import mlflow.pyfunc
+from tensorflow import keras
 
 # COMMAND ----------
 
@@ -37,15 +45,15 @@ client = mlflow.tracking.MlflowClient()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Here we are reading in the Delta table with the new images from the last step as a Spark DataFrame.
+# MAGIC %md
+# MAGIC ### Data Preparation for Image Scoring
+# MAGIC 
+# MAGIC This loads the new batch of images to be scored (for the demo, it's the same set of images) from the `new_images` table we created in the last step. 
 
 # COMMAND ----------
 
-df = spark.table("new_images") 
-
-# COMMAND ----------
-
-# MAGIC %run /Projects/ashley.trainor@databricks.com/databricks_dl_demo/notebooks/Users/oliver.koernig@databricks.com/ML_Pipeline/Functions
+df = spark.table("image_data")
+df_new = df.filter("label is NULL AND predicted_label is NULL").select("path", "modificationTime", "length", "content", "label", "load_date")
 
 # COMMAND ----------
 
@@ -61,7 +69,9 @@ schema_list = [
 StructField("path", StringType(),True),
 StructField("modificationTime", TimestampType(),True),
 StructField("length",LongType(),True),
-StructField("load_date",DateType(),True)]
+StructField("content", BinaryType(), True),
+StructField("label", IntegerType(), True),
+StructField("load_date", DateType(),True)]
 
 label_list = [StructField("label_{}".format(i), FloatType(), True) for i in range(num_labels)]
 
@@ -72,7 +82,21 @@ schema = StructType(schema_list + label_list + pred_list)
 
 # COMMAND ----------
 
-import pandas as pd
+img_size = 299
+
+def scale_image(image_bytes):
+  image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+  # Scale image down
+  image.thumbnail((img_size, img_size), Image.ANTIALIAS)
+  x, y = image.size
+  # Add border to make it square
+  with_bg = Image.new('RGB', (img_size, img_size), (255, 255, 255))
+  with_bg.paste(image, box=((img_size - x) // 2, (img_size - y) // 2))
+  return with_bg.tobytes()
+
+scale_image_udf = udf(scale_image, BinaryType())
+
+# COMMAND ----------
 
 def predict_match_udf(image_dfs):
   #This loads the latest image scoring production model from the model registry
@@ -92,31 +116,28 @@ def predict_match_udf(image_dfs):
     
     final_df["predicted_score"] = predicted_scores
     final_df["predicted_label"] = predicted_labels
-    final_df.drop(columns=["content", "image"], inplace=True)
+    final_df.drop(columns=["image"], inplace=True)
     
     yield pd.DataFrame(final_df)
  
 
 # COMMAND ----------
 
-image_df = df.withColumn("image", scale_image_udf("content"))
+image_df = df_new.withColumn("image", scale_image_udf("content"))
 preds = image_df.mapInPandas(predict_match_udf, schema=schema)
 
 # COMMAND ----------
 
-display(preds)
+preds.createOrReplaceTempView("preds")
 
 # COMMAND ----------
 
-# MAGIC %md Here we add a date column that we will use to partition the output of the model in another Delta Table.
-
-# COMMAND ----------
-
-preds.write.format("delta") \
-              .partitionBy("load_date") \
-              .mode("append") \
-              .option("mergeSchema", "true") \
-              .saveAsTable("image_label_results")
+# MAGIC %sql
+# MAGIC MERGE INTO image_data i
+# MAGIC     USING preds p
+# MAGIC     ON i.path = p.path
+# MAGIC     WHEN MATCHED THEN UPDATE SET *
+# MAGIC     WHEN NOT MATCHED THEN INSERT *
 
 # COMMAND ----------
 
@@ -126,18 +147,9 @@ preds.write.format("delta") \
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC --- Only need to run this for the first time, it will fail otherwise
-# MAGIC ---alter table image_label_results ADD COLUMNS (manual_label FLOAT)
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC select * from image_label_results
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC --drop table if exists image_label_results
+# MAGIC select *
+# MAGIC from image_data
+# MAGIC where predicted_label is null and label is null
 
 # COMMAND ----------
 

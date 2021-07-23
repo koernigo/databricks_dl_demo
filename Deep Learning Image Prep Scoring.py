@@ -7,28 +7,53 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("table_path","/ml/images/tables/")
-table_path=dbutils.widgets.get("table_path")
-dbutils.widgets.text("image_path","/mnt/poc/images/caltech_256/")
+from pyspark.sql.functions import current_date, col
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC use dl_demo
+
+# COMMAND ----------
+
+dbutils.widgets.text("image_path","/tmp/256_ObjectCategories/")
 image_path = dbutils.widgets.get("image_path")
-table_path=dbutils.widgets.get("table_path")
 
 # COMMAND ----------
 
-# MAGIC %run /Projects/ashley.trainor@databricks.com/databricks_dl_demo/notebooks/Users/oliver.koernig@databricks.com/ML_Pipeline/Functions
+raw_image_df = spark.readStream.format("cloudFiles") \
+              .option("cloudFiles.format", "binaryFile") \
+              .option("recursiveFileLookup", "true") \
+              .option("pathGlobFilter", "*.jpg") \
+              .load(image_path) 
+
+raw_image_df_filter = raw_image_df.filter(col("path").rlike( "dbfs:\/tmp\/256_ObjectCategories\/.*\/.*_0001.jpg"))
 
 # COMMAND ----------
 
-raw_image_df = spark.read.format("binaryFile").option("pathGlobFilter", "*.jpg").option("recursiveFileLookup", "true").load(image_path).repartition(64)
+df_with_date = raw_image_df_filter.withColumn("load_date", current_date())
+#df_with_date.write.format("delta").mode("append").option("mergeSchema", "true").saveAsTable("image_data")
 
 # COMMAND ----------
 
-from pyspark.sql.functions import current_date
-
-
-df_with_date = raw_image_df.withColumn("load_date", current_date())
-df_with_date.write.partitionBy("load_date").format("delta").mode("append").option("mergeSchema", "true").saveAsTable("new_images")
+display(df_with_date)
 
 # COMMAND ----------
 
-# MAGIC %sql select count(*) from new_images where load_date = current_date()
+#image_df_filter.writeStream.format("delta").mode("overwrite").option("mergeSchema", True).saveAsTable("image_data")
+
+df_with_date.writeStream \
+  .format("delta") \
+  .option("checkpointLocation", "/tmp/chkpt/dl_demo/scoring/image_data") \
+  .trigger(once=True) \
+  .option("mergeSchema", True) \
+  .start("/tmp/dl_demo/images_data")
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from dl_demo.image_data where label is null
+
+# COMMAND ----------
+
+

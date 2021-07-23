@@ -1,17 +1,11 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC Demo the callout to the AWS A2I service. Note that this is not doing an actual calout , however it contains all the required steps.
+# MAGIC To manually label a random selection of low scoring images, 
 
 # COMMAND ----------
 
-dbutils.widgets.text("table_path","/tmp/ok/binary/caltech_256_image/")
-table_path=dbutils.widgets.get("table_path")
-
-# COMMAND ----------
-
-import boto3
-
-client = boto3.client('sagemaker-a2i-runtime', 'east-us-2')
+# MAGIC %sql
+# MAGIC use dl_demo
 
 # COMMAND ----------
 
@@ -21,9 +15,14 @@ client = boto3.client('sagemaker-a2i-runtime', 'east-us-2')
 
 import json
 #read new images to be processed from label table
-new_images_tobe_labeled = spark.sql("select * from image_label_results where load_date = current_date() and predicted_score < 99")
+new_images_tobe_labeled = spark.sql("select * from image_data where predicted_score < 95 and predicted_score is not null")
+
 #Write to json
-result= new_images_tobe_labeled.select("path","predicted_label").write.mode("overwrite").option("multiline","false").json(dbutils.widgets.get("table_path")+"/new_images.json")
+result = new_images_tobe_labeled \
+  .select("path","predicted_label") \
+  .write.mode("overwrite") \
+  .option("multiline","false") \
+  .json("/tmp/new_images.json")
 
 json_images = new_images_tobe_labeled.toJSON().collect()
 
@@ -95,7 +94,7 @@ for resp in completed_human_loops:
 
 # COMMAND ----------
 
-#last step : Insert manually labeled images back into the main Delta Table  image_label_results
+#last step : Insert manually labeled images back into the main Delta Table  image_label_results with a indicator that they are manually labeled. These can then flow into the labeled_images table as well !!!
 
 # COMMAND ----------
 
