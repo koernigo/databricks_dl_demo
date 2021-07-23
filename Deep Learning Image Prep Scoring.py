@@ -7,6 +7,10 @@
 
 # COMMAND ----------
 
+from pyspark.sql.functions import current_date, col
+
+# COMMAND ----------
+
 # MAGIC %sql
 # MAGIC use dl_demo
 
@@ -17,17 +21,33 @@ image_path = dbutils.widgets.get("image_path")
 
 # COMMAND ----------
 
-raw_image_df = spark.read.format("binaryFile") \
-                    .option("pathGlobFilter", "*.jpg") \
-                    .option("recursiveFileLookup", "true") \
-                    .load(image_path).repartition(64).limit(100)
+raw_image_df = spark.readStream.format("cloudFiles") \
+              .option("cloudFiles.format", "binaryFile") \
+              .option("recursiveFileLookup", "true") \
+              .option("pathGlobFilter", "*.jpg") \
+              .load(image_path) 
+
+raw_image_df_filter = raw_image_df.filter(col("path").rlike( "dbfs:\/tmp\/256_ObjectCategories\/.*\/.*_0001.jpg"))
 
 # COMMAND ----------
 
-from pyspark.sql.functions import current_date
+df_with_date = raw_image_df_filter.withColumn("load_date", current_date())
+#df_with_date.write.format("delta").mode("append").option("mergeSchema", "true").saveAsTable("image_data")
 
-df_with_date = raw_image_df.withColumn("load_date", current_date())
-df_with_date.write.format("delta").mode("append").option("mergeSchema", "true").saveAsTable("image_data")
+# COMMAND ----------
+
+display(df_with_date)
+
+# COMMAND ----------
+
+#image_df_filter.writeStream.format("delta").mode("overwrite").option("mergeSchema", True).saveAsTable("image_data")
+
+df_with_date.writeStream \
+  .format("delta") \
+  .option("checkpointLocation", "/tmp/chkpt/dl_demo/scoring/image_data") \
+  .trigger(once=True) \
+  .option("mergeSchema", True) \
+  .start("/tmp/dl_demo/images_data")
 
 # COMMAND ----------
 

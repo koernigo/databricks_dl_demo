@@ -1,5 +1,5 @@
 # Databricks notebook source
-from pyspark.sql.functions import current_date
+from pyspark.sql.functions import current_date, col
 
 # COMMAND ----------
 
@@ -47,11 +47,20 @@ raw_image_df = spark.read.format("binaryFile") \
                   .option("recursiveFileLookup", "true") \
                    .load(caltech_256_path)
 
-image_df = raw_image_df.withColumn("label",file_to_label_udf("path")).withColumn("load_date", current_date())
+image_df = raw_image_df.withColumn("label",file_to_label_udf("path")) \
+                       .withColumn("load_date", current_date())
 
 # COMMAND ----------
 
-image_df.write.format("delta").mode("overwrite").option("mergeSchema", True).saveAsTable("image_data")
+image_df_filter = image_df.filter(~col("path") \
+                          .rlike( "dbfs:\/tmp\/256_ObjectCategories\/.*\/.*_0001.jpg"))
+
+# COMMAND ----------
+
+image_df_filter.write.format("delta") \
+                     .mode("overwrite") \
+                     .option("mergeSchema", True) \
+                     .saveAsTable("image_data")
 
 # COMMAND ----------
 

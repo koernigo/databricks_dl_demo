@@ -6,6 +6,10 @@
 
 # COMMAND ----------
 
+spark.conf.set("spark.databricks.delta.schema.autoMerge.enabled", "true")
+
+# COMMAND ----------
+
 # MAGIC %sql
 # MAGIC use dl_demo
 
@@ -128,26 +132,12 @@ preds.createOrReplaceTempView("preds")
 
 # COMMAND ----------
 
-# MAGIC %md Here we add a date column that we will use to partition the output of the model in another Delta Table.
-
-# COMMAND ----------
-
-from delta.tables import *
-
-image_table = DeltaTable.forName(spark, "image_data")
-
-# COMMAND ----------
-
-updates = {f'images.{col}':f'updates.{col}' for col in schema.names[1:]}
-
-# COMMAND ----------
-
-image_table.alias("images").merge(
-    preds.alias("updates"),
-     "images.path = updates.path") \
-  .whenMatchedUpdate(set = updates ) \
-  .whenNotMatchedInsertAll() \
-  .execute()
+# MAGIC %sql
+# MAGIC MERGE INTO image_data i
+# MAGIC     USING preds p
+# MAGIC     ON i.path = p.path
+# MAGIC     WHEN MATCHED THEN UPDATE SET *
+# MAGIC     WHEN NOT MATCHED THEN INSERT *
 
 # COMMAND ----------
 
@@ -160,3 +150,7 @@ image_table.alias("images").merge(
 # MAGIC select *
 # MAGIC from image_data
 # MAGIC where predicted_label is null and label is null
+
+# COMMAND ----------
+
+

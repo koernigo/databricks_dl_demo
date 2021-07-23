@@ -78,7 +78,7 @@ def build_model(dropout=None):
 
 # COMMAND ----------
 
-full_data = spark.table("labeled_images").select("content", "label").limit(1000)
+full_data = spark.table("image_data").filter("label is not null").select("content", "label").limit(1000)
 df_train, df_val = full_data.randomSplit([0.9, 0.1], seed=12345)
 
 num_classes = full_data.select("label").distinct().count()
@@ -264,6 +264,7 @@ def train_hvd():
 
 # DBTITLE 1,Use Horovod for distributed DL
 with mlflow.start_run() as run:
+  mlflow.autolog()
   active_run_uuid = mlflow.active_run().info.run_uuid
   process_mode = "hvd (distributed)"  
   hr = HorovodRunner(np=8)

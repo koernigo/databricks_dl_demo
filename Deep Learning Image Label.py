@@ -1,17 +1,11 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC Demo the callout to the AWS A2I service. Note that this is not doing an actual calout , however it contains all the required steps.
+# MAGIC To manually label a random selection of low scoring images, 
 
 # COMMAND ----------
 
 # MAGIC %sql
 # MAGIC use dl_demo
-
-# COMMAND ----------
-
-import boto3
-
-client = boto3.client('sagemaker-a2i-runtime', 'east-us-2')
 
 # COMMAND ----------
 
