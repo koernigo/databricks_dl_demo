@@ -89,6 +89,10 @@ df_val = df_val.repartition(8)
 
 # COMMAND ----------
 
+display(spark.table("image_data"))
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC  Use `/dbfs/ml` and Petastorm for Efficient Data Access
 # MAGIC  

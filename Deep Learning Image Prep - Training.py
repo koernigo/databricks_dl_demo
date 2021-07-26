@@ -27,6 +27,16 @@ caltech_256_path = dbutils.widgets.get("image_path")
 
 # COMMAND ----------
 
+# MAGIC %sh
+# MAGIC ls /dbfs/tmp/256_ObjectCategories
+
+# COMMAND ----------
+
+# MAGIC %sh
+# MAGIC rm -rf /dbfs//tmp/chkpt/dl_demo/training/image_data
+
+# COMMAND ----------
+
 import numpy as np
 from pyspark.sql.types import IntegerType
 from pyspark.sql.functions import pandas_udf
@@ -61,12 +71,13 @@ image_df = raw_image_df.withColumn("label",file_to_label_udf("path")) \
 
 # COMMAND ----------
 
-raw_image_df.writeStream \
+image_df.writeStream \
   .format("delta") \
   .option("checkpointLocation", "/tmp/chkpt/dl_demo/training/image_data") \
   .trigger(once=True) \
   .option("mergeSchema", True) \
   .start("/tmp/dl_demo/images_data")
+#display(image_df)
 
 # COMMAND ----------
 
@@ -82,4 +93,10 @@ raw_image_df.writeStream \
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC select * from image_data
 
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from image_data where label is not null
