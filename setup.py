@@ -13,6 +13,14 @@ import re
 
 # COMMAND ----------
 
+# MAGIC %sh rm -rf /dbfs/tmp/chkpt/dl_demo/training/image_data2
+
+# COMMAND ----------
+
+# MAGIC %sh rm -rf /dbfs/tmp/chkpt/dl_demo/training/image_data
+
+# COMMAND ----------
+
 # MAGIC %sql
 # MAGIC CREATE TABLE dl_demo.image_data 
 # MAGIC (path STRING
