@@ -5,15 +5,16 @@ import re
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC CREATE DATABASE IF NOT EXISTS dl_demo
+
+# COMMAND ----------
+
+# MAGIC %sql
 # MAGIC drop table if exists dl_demo.image_data
 
 # COMMAND ----------
 
 # MAGIC %sh rm -rf /dbfs/tmp/dl_demo/images_data
-
-# COMMAND ----------
-
-# MAGIC %sh rm -rf /dbfs/tmp/chkpt/dl_demo/training/image_data2
 
 # COMMAND ----------
 
@@ -52,7 +53,3 @@ for root, dirs, files in os.walk(root):
 
 for path in paths:
   dbutils.fs.mv(path[5:], '/tmp/unlabeled_images/'+path[9:])
-
-# COMMAND ----------
-
-

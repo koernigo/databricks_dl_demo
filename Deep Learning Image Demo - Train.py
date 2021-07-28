@@ -83,7 +83,7 @@ df_train, df_val = full_data.randomSplit([0.9, 0.1], seed=12345)
 
 num_classes = full_data.select("label").distinct().count()
 
-# Make sure the number of partitions is at least the number of workers which is required for distributed training.
+# Make sure the number of partitions is at least the number of cores which is required for distributed training.
 df_train = df_train.repartition(8)
 df_val = df_val.repartition(8)
 

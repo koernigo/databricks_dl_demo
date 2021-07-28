@@ -36,6 +36,7 @@ from pyspark.sql.types import *
 import mlflow
 import mlflow.pyfunc
 from tensorflow import keras
+from datetime import date
 
 # COMMAND ----------
 
@@ -48,12 +49,16 @@ client = mlflow.tracking.MlflowClient()
 # MAGIC %md
 # MAGIC ### Data Preparation for Image Scoring
 # MAGIC 
-# MAGIC This loads the new batch of images to be scored (for the demo, it's the same set of images) from the `new_images` table we created in the last step. 
+# MAGIC This loads the new batch of images to be scored (for the demo, it's the same set of images) from the `image_data` table we created in the last step. 
 
 # COMMAND ----------
 
 df = spark.table("image_data")
 df_new = df.filter("label is NULL AND predicted_label is NULL").select("path", "modificationTime", "length", "content", "label", "load_date")
+
+# COMMAND ----------
+
+display(df_new)
 
 # COMMAND ----------
 
@@ -146,11 +151,11 @@ preds.createOrReplaceTempView("preds")
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC select *
-# MAGIC from image_data
-# MAGIC where predicted_label is null and label is null
+from datetime import date
 
 # COMMAND ----------
 
-
+# MAGIC %sql
+# MAGIC select path, label,predicted_label
+# MAGIC from image_data
+# MAGIC where  load_date = date.today()

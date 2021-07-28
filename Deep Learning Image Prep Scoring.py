@@ -7,6 +7,12 @@
 
 # COMMAND ----------
 
+# DBTITLE 1,Checkpoint location needs to be deleted, otherwise no new images will be processed if this is run more than once
+# MAGIC %fs
+# MAGIC rm -r /tmp/chkpt/dl_demo/scoring/image_data
+
+# COMMAND ----------
+
 from pyspark.sql.functions import current_date, col
 
 # COMMAND ----------
@@ -39,3 +45,12 @@ df_with_date.writeStream \
   .trigger(once=True) \
   .option("mergeSchema", True) \
   .start("/tmp/dl_demo/images_data")
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select path from image_data where label is null
+
+# COMMAND ----------
+
+

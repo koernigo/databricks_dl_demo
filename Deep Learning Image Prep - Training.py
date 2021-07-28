@@ -46,19 +46,6 @@ image_df.writeStream \
 
 # COMMAND ----------
 
+# DBTITLE 1,Optimize: Delta will rewrite the file structure into smaller, more manageable files to ensure that queries perform at an optimal level
 # MAGIC %sql
 # MAGIC optimize image_data
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC select * from dl_demo.image_data
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC select path, label from image_data where label is not null
-
-# COMMAND ----------
-
-
