@@ -7,9 +7,9 @@
             {
                 "existing_cluster_id": "0512-123048-hares793",
                 "notebook_task": {
-                    "notebook_path": "/Repos/oliver.koernig/databricks_dl_demo/Deep Learning Image Prep Scoring",
+                    "notebook_path": "/Repos/oliver.koernig@databricks.com/databricks_dl_demo/Deep Learning Image Prep Scoring",
                     "base_parameters": {
-                        "image_path": "/tmp/256_ObjectCategories/"
+                        "image_path": "/tmp/unlabeled_images/256_ObjectCategories/"
                     }
                 },
                 "email_notifications": {},
@@ -18,7 +18,7 @@
             {
                 "existing_cluster_id": "0512-123048-hares793",
                 "notebook_task": {
-                    "notebook_path": "/Repos/oliver.koernig/databricks_dl_demo/Deep Learning Image Label Azure",
+                    "notebook_path": "/Repos/oliver.koernig@databricks.com/databricks_dl_demo/Deep Learning Image Label Azure",
                     "base_parameters": {
                         "image_path": "/tmp/256_ObjectCategories/"
                     }
@@ -34,7 +34,7 @@
             {
                 "existing_cluster_id": "0512-123048-hares793",
                 "notebook_task": {
-                    "notebook_path": "/Repos/oliver.koernig/databricks_dl_demo/Deep Learning Image Batch Scoring"
+                    "notebook_path": "/Repos/oliver.koernig@databricks.com/databricks_dl_demo/Deep Learning Image Batch Scoring"
                 },
                 "email_notifications": {},
                 "task_key": "Score_Images",

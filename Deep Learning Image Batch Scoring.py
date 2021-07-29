@@ -143,19 +143,3 @@ preds.createOrReplaceTempView("preds")
 # MAGIC     ON i.path = p.path
 # MAGIC     WHEN MATCHED THEN UPDATE SET *
 # MAGIC     WHEN NOT MATCHED THEN INSERT *
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC The table below is an output of our model scoring. It contains the data from the original delta table with metadata on the raw images, the prediction for each label, as well as the predicted label and its score. 
-
-# COMMAND ----------
-
-from datetime import date
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC select path, label,predicted_label
-# MAGIC from image_data
-# MAGIC where  load_date = date.today()
