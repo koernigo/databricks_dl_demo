@@ -15,7 +15,7 @@
                 "task_key": "Load_Images_for_Training"
             },
             {
-                "existing_cluster_id": "0909-190547-toads94",
+                "existing_cluster_id": "0909-191242-point445",
                 "notebook_task": {
                     "notebook_path": "/Repos/oliver.koernig@databricks.com/databricks_dl_demo/Deep Learning Image Demo - Train",
                     "base_parameters": {
@@ -32,7 +32,7 @@
                 ]
             },
             {
-                "existing_cluster_id": "0909-191242-point445",
+                "existing_cluster_id": "0909-190547-toads94",
                 "notebook_task": {
                     "notebook_path": "/Repos/oliver.koernig@databricks.com/databricks_dl_demo/Deep Learning Image Demo - Registry",
                     "base_parameters": {

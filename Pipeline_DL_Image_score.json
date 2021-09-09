@@ -1,5 +1,4 @@
 {
-    "settings": {
         "email_notifications": {},
         "name": "Pipeline_Image_Score",
         "max_concurrent_runs": 1,
@@ -45,5 +44,4 @@
                 ]
             }
         ]
-    }
 }
