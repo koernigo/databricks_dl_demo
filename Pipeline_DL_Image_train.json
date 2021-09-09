@@ -1,11 +1,10 @@
 {
-    "settings": {
         "email_notifications": {},
         "name": "Pipeline_DL_Image_Train",
         "max_concurrent_runs": 1,
         "tasks": [
             {
-                "existing_cluster_id": "0512-123048-hares793",
+                "existing_cluster_id": "0909-190547-toads94",
                 "notebook_task": {
                     "notebook_path": "/Repos/oliver.koernig@databricks.com/databricks_dl_demo/Deep Learning Image Prep - Training",
                     "base_parameters": {
@@ -16,7 +15,7 @@
                 "task_key": "Load_Images_for_Training"
             },
             {
-                "existing_cluster_id": "0602-102529-bandy637",
+                "existing_cluster_id": "0909-190547-toads94",
                 "notebook_task": {
                     "notebook_path": "/Repos/oliver.koernig@databricks.com/databricks_dl_demo/Deep Learning Image Demo - Train",
                     "base_parameters": {
@@ -33,7 +32,7 @@
                 ]
             },
             {
-                "existing_cluster_id": "0512-123048-hares793",
+                "existing_cluster_id": "0909-191242-point445",
                 "notebook_task": {
                     "notebook_path": "/Repos/oliver.koernig@databricks.com/databricks_dl_demo/Deep Learning Image Demo - Registry",
                     "base_parameters": {
@@ -49,5 +48,4 @@
                 ]
             }
         ]
-    }
 }

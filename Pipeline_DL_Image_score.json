@@ -5,7 +5,7 @@
         "max_concurrent_runs": 1,
         "tasks": [
             {
-                "existing_cluster_id": "0512-123048-hares793",
+                "existing_cluster_id": "0909-190547-toads94",
                 "notebook_task": {
                     "notebook_path": "/Repos/oliver.koernig@databricks.com/databricks_dl_demo/Deep Learning Image Prep Scoring",
                     "base_parameters": {
@@ -16,7 +16,7 @@
                 "task_key": "Load_New_Images"
             },
             {
-                "existing_cluster_id": "0512-123048-hares793",
+                "existing_cluster_id": "0909-190547-toads94",
                 "notebook_task": {
                     "notebook_path": "/Repos/oliver.koernig@databricks.com/databricks_dl_demo/Deep Learning Image Label Azure",
                     "base_parameters": {
@@ -32,7 +32,7 @@
                 ]
             },
             {
-                "existing_cluster_id": "0512-123048-hares793",
+                "existing_cluster_id": "0909-190547-toads94",
                 "notebook_task": {
                     "notebook_path": "/Repos/oliver.koernig@databricks.com/databricks_dl_demo/Deep Learning Image Batch Scoring"
                 },
